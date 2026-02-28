@@ -36,6 +36,7 @@
 -(IBAction)deleteRow:(id)sender;
 -(IBAction)deleteColumn:(id)sender;
 -(IBAction)exportFile:(id)sender;
+-(IBAction)toggleLineNumbers:(id)sender;
 
 -(void)configurationChangedForFormatViewController:(TTFormatViewController *)formatViewController;
 

@@ -628,6 +628,13 @@ CA
                                     <action selector="runToolbarCustomizationPalette:" target="-1" id="pQI-g3-MTW"/>
                                 </connections>
                             </menuItem>
+                            <menuItem isSeparatorItem="YES" id="TTL-ln-sep"/>
+                            <menuItem title="Show Line Numbers" id="TTL-ln-001">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="toggleLineNumbers:" target="-1" id="TTL-ln-002"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>

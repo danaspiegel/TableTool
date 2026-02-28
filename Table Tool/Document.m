@@ -135,6 +135,7 @@
 			[headerRow addObject:@""];
 		}
 		for(NSTableColumn * col in self.tableView.tableColumns){
+			if ([col.identifier isEqualToString:TTLineNumberColumnIdentifier]) continue;
 			[headerRow replaceObjectAtIndex:col.identifier.integerValue withObject:col.headerCell.stringValue];
 		}
 		exportData = [@[headerRow] arrayByAddingObjectsFromArray:exportData];
@@ -242,6 +243,10 @@
 
 - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
     
+    if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+        return [NSString stringWithFormat:@"%ld", rowIndex + 1];
+    }
+    
     if(_data.count >= rowIndex+1) {
         NSArray *rowArray = _data[rowIndex];
         if(rowArray.count >= tableColumn.identifier.integerValue+1){
@@ -256,12 +261,16 @@
 
 -(void)tableView:(NSTableView *)tableView setObjectValue:(id)object forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
     
+    if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) return;
     [self restoreObjectValue:object forTableColumn:tableColumn row:rowIndex reload:NO];
     [self.undoManager setActionName:@"Edit Cell"];
     
 }
 
 -(void)tableView:(NSTableView *)tableView willDisplayCell:(id)cell forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
+    if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+        return;
+    }
     if(_data.count <= rowIndex) return;
     NSTextFieldCell *textCell = cell;
     NSArray *rowArray = [_data objectAtIndex:rowIndex];
@@ -272,6 +281,22 @@
             textCell.alignment = NSLeftTextAlignment;
         }
     }
+}
+
+-(BOOL)tableView:(NSTableView *)tableView shouldEditTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
+    return ![tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier];
+}
+
+-(BOOL)tableView:(NSTableView *)tableView shouldSelectTableColumn:(NSTableColumn *)tableColumn {
+    return ![tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier];
+}
+
+-(BOOL)tableView:(NSTableView *)tableView shouldReorderColumn:(NSInteger)columnIndex toColumn:(NSInteger)newColumnIndex {
+    if (columnIndex < 0 || columnIndex >= (NSInteger)self.tableView.tableColumns.count) return YES;
+    NSTableColumn *col = self.tableView.tableColumns[columnIndex];
+    if ([col.identifier isEqualToString:TTLineNumberColumnIdentifier]) return NO;
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey] && newColumnIndex == 0) return NO;
+    return YES;
 }
 
 -(void)restoreObjectValue:(id)object forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex reload:(BOOL)shouldReload {
@@ -315,7 +340,9 @@
 -(NSArray *)getColumnsOrder{
     NSMutableArray *columnsOrder = [[NSMutableArray alloc] init];
     for(NSTableColumn *col in self.tableView.tableColumns) {
-        [columnsOrder addObject:col.identifier];
+        if (![col.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+            [columnsOrder addObject:col.identifier];
+        }
     }
     return columnsOrder.copy;
 }
@@ -559,12 +586,34 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
 
 #pragma mark - updateTableView
 
+-(NSTableColumn *)createLineNumberColumn {
+    NSTableColumn *lineNumberColumn = [[NSTableColumn alloc] initWithIdentifier:TTLineNumberColumnIdentifier];
+    NSTextFieldCell *lineNumberCell = [[NSTextFieldCell alloc] init];
+    lineNumberCell.alignment = NSRightTextAlignment;
+    lineNumberCell.textColor = [NSColor secondaryLabelColor];
+    lineNumberCell.editable = NO;
+    lineNumberColumn.dataCell = lineNumberCell;
+    lineNumberColumn.headerCell.stringValue = @"#";
+    ((NSCell *)lineNumberColumn.headerCell).alignment = NSCenterTextAlignment;
+    lineNumberColumn.width = 40;
+    lineNumberColumn.minWidth = 20;
+    lineNumberColumn.maxWidth = 60;
+    lineNumberColumn.resizingMask = NSTableColumnUserResizingMask;
+    lineNumberColumn.editable = NO;
+    return lineNumberColumn;
+}
+
 -(void)updateTableColumns {
     if (!self.tableView) return;
     
     for(NSTableColumn *col in self.tableView.tableColumns.mutableCopy) {
         [self.tableView removeTableColumn:col];
     }
+    
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey]) {
+        [self.tableView addTableColumn:[self createLineNumberColumn]];
+    }
+    
     for(int i = 0; i < _maxColumnNumber; ++i) {
         NSTableColumn *tableColumn = [[NSTableColumn alloc] initWithIdentifier:[NSString stringWithFormat:@"%d",i]];
         tableColumn.dataCell = dataCell;
@@ -576,10 +625,13 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
 
 -(void)updateTableColumnsNames {
     if(!self.csvConfig.firstRowAsHeader){
+        int dataColumnIndex = 0;
         for(int i = 0; i < [self.tableView.tableColumns count]; i++) {
             NSTableColumn *tableColumn = self.tableView.tableColumns[i];
-            tableColumn.headerCell.stringValue = [self generateColumnName:i];
+            if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) continue;
+            tableColumn.headerCell.stringValue = [self generateColumnName:dataColumnIndex];
             ((NSCell *)tableColumn.headerCell).alignment = NSCenterTextAlignment;
+            dataColumnIndex++;
         }
     }
 }
@@ -680,10 +732,11 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         return;
     }
     
+    BOOL showingLineNumbers = [[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey];
     long columnIndex;
     if([self.tableView selectedColumn] == -1){
         if([self.tableView editedColumn] == -1){
-            columnIndex = 0;
+            columnIndex = showingLineNumbers ? 1 : 0;
         } else {
             columnIndex = [self.tableView editedColumn];
         }
@@ -964,6 +1017,10 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
             return NO;
         }
     }
+    if (menuItem.action == @selector(toggleLineNumbers:)) {
+        BOOL showingLineNumbers = [[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey];
+        menuItem.state = showingLineNumbers ? NSOnState : NSOffState;
+    }
     return YES;
 }
 
@@ -1152,4 +1209,23 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
 -(IBAction)openReadme:(id)sender {
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/jakob/TableTool/blob/master/README.md"]];
 }
+
+-(IBAction)toggleLineNumbers:(id)sender {
+    BOOL current = [[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey];
+    BOOL newValue = !current;
+    [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:TTShowLineNumbersKey];
+    if (newValue) {
+        [self.tableView addTableColumn:[self createLineNumberColumn]];
+        [self.tableView moveColumn:[self.tableView numberOfColumns]-1 toColumn:0];
+    } else {
+        for (NSTableColumn *col in self.tableView.tableColumns) {
+            if ([col.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+                [self.tableView removeTableColumn:col];
+                break;
+            }
+        }
+    }
+    [self.tableView reloadData];
+}
+
 @end

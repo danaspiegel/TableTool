@@ -11,3 +11,11 @@
 #pragma mark Pasteboard Types
 
 extern NSString *TTRowInternalPboardType;
+
+#pragma mark Table Column Identifiers
+
+extern NSString *TTLineNumberColumnIdentifier;
+
+#pragma mark User Defaults Keys
+
+extern NSString *TTShowLineNumbersKey;

@@ -7,12 +7,17 @@
 //
 
 #import "AppDelegate.h"
+#import "Constants.h"
 
 @interface AppDelegate ()
 
 @end
 
 @implementation AppDelegate
+
++ (void)initialize {
+    [[NSUserDefaults standardUserDefaults] registerDefaults:@{TTShowLineNumbersKey: @YES}];
+}
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     // Insert code here to initialize your application
