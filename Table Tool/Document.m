@@ -309,9 +309,9 @@
     NSArray *rowArray = [_data objectAtIndex:rowIndex];
     if(rowArray.count > tableColumn.identifier.integerValue){
         if([rowArray[tableColumn.identifier.integerValue] isKindOfClass:[NSDecimalNumber class]]){
-            textCell.alignment = NSRightTextAlignment;
+            textCell.alignment = NSTextAlignmentRight;
         }else{
-            textCell.alignment = NSLeftTextAlignment;
+            textCell.alignment = NSTextAlignmentLeft;
         }
     }
 }
@@ -386,7 +386,7 @@
 {
     validPBoardTypes = [NSArray arrayWithObjects:TTRowInternalPboardType,
                                                  NSPasteboardTypeTabularText,
-                                                 NSStringPboardType,
+                                                 NSPasteboardTypeString,
                                                  nil];
 }
 
@@ -622,12 +622,12 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
 -(NSTableColumn *)createLineNumberColumn {
     NSTableColumn *lineNumberColumn = [[NSTableColumn alloc] initWithIdentifier:TTLineNumberColumnIdentifier];
     NSTextFieldCell *lineNumberCell = [[NSTextFieldCell alloc] init];
-    lineNumberCell.alignment = NSRightTextAlignment;
+    lineNumberCell.alignment = NSTextAlignmentRight;
     lineNumberCell.textColor = [NSColor secondaryLabelColor];
     lineNumberCell.editable = NO;
     lineNumberColumn.dataCell = lineNumberCell;
     lineNumberColumn.headerCell.stringValue = @"#";
-    ((NSCell *)lineNumberColumn.headerCell).alignment = NSCenterTextAlignment;
+    ((NSCell *)lineNumberColumn.headerCell).alignment = NSTextAlignmentCenter;
     lineNumberColumn.width = 40;
     lineNumberColumn.minWidth = 20;
     lineNumberColumn.maxWidth = 60;
@@ -651,7 +651,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         NSTableColumn *tableColumn = [[NSTableColumn alloc] initWithIdentifier:[NSString stringWithFormat:@"%d",i]];
         tableColumn.dataCell = dataCell;
 		tableColumn.headerCell.stringValue = i < columnNames.count ? columnNames[i] : [self generateColumnName:i];
-        ((NSCell *)tableColumn.headerCell).alignment = NSCenterTextAlignment;
+        ((NSCell *)tableColumn.headerCell).alignment = NSTextAlignmentCenter;
         tableColumn.sortDescriptorPrototype = [NSSortDescriptor sortDescriptorWithKey:[NSString stringWithFormat:@"%d",i] ascending:YES];
         [self.tableView addTableColumn: tableColumn];
     }
@@ -664,7 +664,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
             NSTableColumn *tableColumn = self.tableView.tableColumns[i];
             if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) continue;
             tableColumn.headerCell.stringValue = [self generateColumnName:dataColumnIndex];
-            ((NSCell *)tableColumn.headerCell).alignment = NSCenterTextAlignment;
+            ((NSCell *)tableColumn.headerCell).alignment = NSTextAlignmentCenter;
             dataColumnIndex++;
         }
     }
@@ -990,7 +990,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         if(self.csvConfig.firstRowAsHeader){
             col.headerCell.stringValue = [columnNames objectAtIndex:((NSString *)columnIds[i]).integerValue];
         }
-        ((NSCell *)col.headerCell).alignment = NSCenterTextAlignment;
+        ((NSCell *)col.headerCell).alignment = NSTextAlignmentCenter;
         [self.tableView addTableColumn:col];
         [self.tableView moveColumn:[self.tableView numberOfColumns]-1 toColumn:[columnIndexes firstIndex]+i];
     }
@@ -1053,7 +1053,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
     }
     if (menuItem.action == @selector(toggleLineNumbers:)) {
         BOOL showingLineNumbers = [[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey];
-        menuItem.state = showingLineNumbers ? NSOnState : NSOffState;
+        menuItem.state = showingLineNumbers ? NSControlStateValueOn : NSControlStateValueOff;
     }
     return YES;
 }

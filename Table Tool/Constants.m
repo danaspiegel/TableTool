@@ -10,7 +10,7 @@
 
 #pragma mark Initializing Globals for Pasteboard Types
 
-NSString *TTRowInternalPboardType = @"Table Tool Row Internal PasteBoard Type";
+NSPasteboardType TTRowInternalPboardType = @"Table Tool Row Internal PasteBoard Type";
 
 #pragma mark Initializing Globals for Table Column Identifiers
 

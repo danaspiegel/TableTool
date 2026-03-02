@@ -10,7 +10,7 @@
 
 #pragma mark Pasteboard Types
 
-extern NSString *TTRowInternalPboardType;
+extern NSPasteboardType TTRowInternalPboardType;
 
 #pragma mark Table Column Identifiers
 
