@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: macos-14
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Run tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "Table Tool.xcodeproj" \
+            -scheme "Table Tool" \
+            -destination "platform=macOS" \
+            -configuration Debug \
+            ONLY_ACTIVE_ARCH=NO \
+            MACOSX_DEPLOYMENT_TARGET=10.13 \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ENABLE_TESTABILITY=YES
+
+      - name: Build release artifact
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "Table Tool.xcodeproj" \
+            -scheme "Table Tool" \
+            -destination "platform=macOS" \
+            -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            ONLY_ACTIVE_ARCH=NO \
+            MACOSX_DEPLOYMENT_TARGET=10.13 \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/DerivedData/Build/Products/Release/Table Tool.app" \
+            "$RUNNER_TEMP/TableTool.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TableTool-${{ github.sha }}
+          path: ${{ runner.temp }}/TableTool.zip
+          if-no-files-found: error
