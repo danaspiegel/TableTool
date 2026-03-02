@@ -1323,7 +1323,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
             [self buildFindBarInView:container];
         }
         findBarView.hidden = NO;
-        [self.window makeFirstResponder:findSearchField];
+        [self.tableView.window makeFirstResponder:findSearchField];
     } else if (tag == 2) {
         [self findNext:sender];
     } else if (tag == 3) {
@@ -1379,6 +1379,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
     findSearchField = nil;
     findMatches = nil;
     findMatchIndex = 0;
+    [self.tableView.window makeFirstResponder:self.tableView];
 }
 
 @end
