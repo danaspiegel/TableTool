@@ -1,0 +1,18 @@
+steps:
+  - name: Show Xcode version
+    run: xcodebuild -version
+
+  - name: Build project
+    run: |
+      set -o pipefail
+      xcodebuild build \
+        -project "Table Tool.xcodeproj" \
+        -scheme "Table Tool" \
+        -destination "platform=macOS" \
+        -configuration Debug \
+        ONLY_ACTIVE_ARCH=NO \
+        MACOSX_DEPLOYMENT_TARGET=10.13 \
+        CODE_SIGN_IDENTITY="" \
+        CODE_SIGNING_REQUIRED=NO \
+        CODE_SIGNING_ALLOWED=NO \
+        ENABLE_TESTABILITY=YES
