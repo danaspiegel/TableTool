@@ -19,3 +19,5 @@ extern NSString *TTLineNumberColumnIdentifier;
 #pragma mark User Defaults Keys
 
 extern NSString *TTShowLineNumbersKey;
+extern NSString *TTTableFontNameKey;
+extern NSString *TTTableFontSizeKey;

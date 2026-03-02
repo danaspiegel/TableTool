@@ -19,3 +19,5 @@ NSString *TTLineNumberColumnIdentifier = @"#";
 #pragma mark Initializing Globals for User Defaults Keys
 
 NSString *TTShowLineNumbersKey = @"showLineNumbers";
+NSString *TTTableFontNameKey = @"tableFontName";
+NSString *TTTableFontSizeKey = @"tableFontSize";

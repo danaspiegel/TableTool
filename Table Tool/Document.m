@@ -13,6 +13,7 @@
 #import "CSVHeuristic.h"
 #import "TTErrorViewController.h"
 #import "ToolbarIcons.h"
+#import "TTPreferencesWindowController.h"
 
 @interface Document () {
     NSCell *dataCell;
@@ -32,6 +33,11 @@
     TTErrorViewController *errorController;
     TTFormatViewController *statusBarFormatViewController;
     TTFormatViewController* accessoryViewController;
+
+    NSView *findBarView;
+    NSSearchField *findSearchField;
+    NSArray *findMatches;
+    NSInteger findMatchIndex;
 }
 @property BOOL didSave;
 
@@ -60,12 +66,19 @@
 -(void)dealloc {
 	[self removeObserver:self forKeyPath:@"fileURL"];
 	[self removeObserver:self forKeyPath:@"didSave"];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSUserDefaultsDidChangeNotification object:nil];
 }
 
 - (void)windowControllerDidLoadNib:(NSWindowController *)aController {
     [super windowControllerDidLoadNib:aController];
     dataCell = [self.tableView.tableColumns.firstObject dataCell];
     [self updateTableColumns];
+    [self applyTableFont];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(userDefaultsDidChange:)
+                                                 name:NSUserDefaultsDidChangeNotification
+                                               object:nil];
     
     if (!statusBarFormatViewController) {
         statusBarFormatViewController = [[TTFormatViewController alloc] initWithNibName:@"TTFormatViewController" bundle:nil];
@@ -98,6 +111,26 @@
 
 - (void)close {
     [super close];
+}
+
+-(void)applyTableFont {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *fontName = [defaults stringForKey:TTTableFontNameKey];
+    CGFloat fontSize = [defaults doubleForKey:TTTableFontSizeKey];
+    if (fontSize <= 0) fontSize = 13;
+    NSFont *font = nil;
+    if (fontName) {
+        font = [NSFont fontWithName:fontName size:fontSize];
+    }
+    if (!font) {
+        font = [NSFont systemFontOfSize:fontSize];
+    }
+    [dataCell setFont:font];
+    [self.tableView reloadData];
+}
+
+-(void)userDefaultsDidChange:(NSNotification *)notification {
+    [self applyTableFont];
 }
 
 
@@ -619,6 +652,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         tableColumn.dataCell = dataCell;
 		tableColumn.headerCell.stringValue = i < columnNames.count ? columnNames[i] : [self generateColumnName:i];
         ((NSCell *)tableColumn.headerCell).alignment = NSCenterTextAlignment;
+        tableColumn.sortDescriptorPrototype = [NSSortDescriptor sortDescriptorWithKey:[NSString stringWithFormat:@"%d",i] ascending:YES];
         [self.tableView addTableColumn: tableColumn];
     }
 }
@@ -1226,6 +1260,125 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         }
     }
     [self.tableView reloadData];
+}
+
+#pragma mark - Sort by Column
+
+-(void)tableView:(NSTableView *)tableView sortDescriptorsDidChange:(NSArray *)oldDescriptors {
+    NSSortDescriptor *sd = tableView.sortDescriptors.firstObject;
+    if (!sd) return;
+    NSInteger colIndex = sd.key.integerValue;
+    [_data sortUsingComparator:^NSComparisonResult(NSMutableArray *row1, NSMutableArray *row2) {
+        id val1 = colIndex < (NSInteger)row1.count ? row1[colIndex] : @"";
+        id val2 = colIndex < (NSInteger)row2.count ? row2[colIndex] : @"";
+        NSString *str1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val1 description] : (NSString *)val1;
+        NSString *str2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val2 description] : (NSString *)val2;
+        NSComparisonResult result = [str1 localizedCaseInsensitiveCompare:str2];
+        return sd.ascending ? result : -result;
+    }];
+    [self.tableView reloadData];
+}
+
+#pragma mark - Find Bar
+
+-(void)buildFindBarInView:(NSView *)containerView {
+    findBarView = [[NSView alloc] init];
+    findBarView.translatesAutoresizingMaskIntoConstraints = NO;
+    findBarView.wantsLayer = YES;
+    findBarView.layer.backgroundColor = [NSColor windowBackgroundColor].CGColor;
+    [containerView addSubview:findBarView];
+
+    findSearchField = [[NSSearchField alloc] init];
+    findSearchField.translatesAutoresizingMaskIntoConstraints = NO;
+    findSearchField.target = self;
+    findSearchField.action = @selector(findSearchFieldChanged:);
+    [findBarView addSubview:findSearchField];
+
+    NSButton *prevButton = [NSButton buttonWithTitle:@"▲" target:self action:@selector(findPrev:)];
+    prevButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [findBarView addSubview:prevButton];
+
+    NSButton *nextButton = [NSButton buttonWithTitle:@"▼" target:self action:@selector(findNext:)];
+    nextButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [findBarView addSubview:nextButton];
+
+    NSButton *closeButton = [NSButton buttonWithTitle:@"✕" target:self action:@selector(closeFindBar:)];
+    closeButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [findBarView addSubview:closeButton];
+
+    NSDictionary *views = @{@"field": findSearchField, @"prev": prevButton, @"next": nextButton, @"close": closeButton};
+    [findBarView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-8-[field]-8-[prev]-4-[next]-4-[close]-8-|" options:NSLayoutFormatAlignAllCenterY metrics:nil views:views]];
+    [findBarView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-4-[field]-4-|" options:0 metrics:nil views:views]];
+
+    [containerView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[findBar]|" options:0 metrics:nil views:@{@"findBar": findBarView}]];
+    [containerView addConstraint:[NSLayoutConstraint constraintWithItem:findBarView attribute:NSLayoutAttributeBottom relatedBy:NSLayoutRelationEqual toItem:containerView attribute:NSLayoutAttributeBottom multiplier:1 constant:0]];
+    [containerView addConstraint:[NSLayoutConstraint constraintWithItem:findBarView attribute:NSLayoutAttributeHeight relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:28]];
+}
+
+-(IBAction)performFindPanelAction:(id)sender {
+    NSInteger tag = [sender tag];
+    if (tag == 1) {
+        if (!findBarView) {
+            NSView *container = self.tableView.enclosingScrollView.superview;
+            [self buildFindBarInView:container];
+        }
+        findBarView.hidden = NO;
+        [self.window makeFirstResponder:findSearchField];
+    } else if (tag == 2) {
+        [self findNext:sender];
+    } else if (tag == 3) {
+        [self findPrev:sender];
+    }
+}
+
+-(void)findSearchFieldChanged:(id)sender {
+    NSString *searchString = findSearchField.stringValue;
+    NSMutableArray *matches = [NSMutableArray array];
+    if (searchString.length > 0) {
+        for (NSInteger row = 0; row < (NSInteger)_data.count; row++) {
+            NSMutableArray *rowData = _data[row];
+            for (id cell in rowData) {
+                NSString *cellString = [cell isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)cell description] : (NSString *)cell;
+                if ([cellString rangeOfString:searchString options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    [matches addObject:@(row)];
+                    break;
+                }
+            }
+        }
+    }
+    findMatches = [matches copy];
+    findMatchIndex = 0;
+    if (findMatches.count > 0) {
+        NSInteger row = [findMatches[0] integerValue];
+        [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+        [self.tableView scrollRowToVisible:row];
+    }
+}
+
+-(void)findNext:(id)sender {
+    if (findMatches.count == 0) return;
+    NSInteger count = (NSInteger)findMatches.count;
+    findMatchIndex = (findMatchIndex + 1) % count;
+    NSInteger row = [findMatches[findMatchIndex] integerValue];
+    [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+    [self.tableView scrollRowToVisible:row];
+}
+
+-(void)findPrev:(id)sender {
+    if (findMatches.count == 0) return;
+    NSInteger count = (NSInteger)findMatches.count;
+    findMatchIndex = (findMatchIndex - 1 + count) % count;
+    NSInteger row = [findMatches[findMatchIndex] integerValue];
+    [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+    [self.tableView scrollRowToVisible:row];
+}
+
+-(void)closeFindBar:(id)sender {
+    [findBarView removeFromSuperview];
+    findBarView = nil;
+    findSearchField = nil;
+    findMatches = nil;
+    findMatchIndex = 0;
 }
 
 @end

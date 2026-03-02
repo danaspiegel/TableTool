@@ -8,6 +8,7 @@
 
 #import "AppDelegate.h"
 #import "Constants.h"
+#import "TTPreferencesWindowController.h"
 
 @interface AppDelegate ()
 
@@ -16,7 +17,10 @@
 @implementation AppDelegate
 
 + (void)initialize {
-    [[NSUserDefaults standardUserDefaults] registerDefaults:@{TTShowLineNumbersKey: @YES}];
+    [[NSUserDefaults standardUserDefaults] registerDefaults:@{
+        TTShowLineNumbersKey: @YES,
+        TTTableFontSizeKey: @13
+    }];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
@@ -25,6 +29,10 @@
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
     // Insert code here to tear down your application
+}
+
+-(IBAction)showPreferences:(id)sender {
+    [[TTPreferencesWindowController sharedController] showWindow:sender];
 }
 
 @end
