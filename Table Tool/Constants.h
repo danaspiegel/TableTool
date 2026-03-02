@@ -21,3 +21,13 @@ extern NSString *TTLineNumberColumnIdentifier;
 extern NSString *TTShowLineNumbersKey;
 extern NSString *TTTableFontNameKey;
 extern NSString *TTTableFontSizeKey;
+extern NSString *TTAlternatingRowColorsKey;
+extern NSString *TTRowHeightKey;
+extern NSString *TTDefaultEncodingKey;
+extern NSString *TTDefaultColumnSeparatorKey;
+extern NSString *TTDefaultFirstRowAsHeaderKey;
+
+#pragma mark Table View
+
+extern const CGFloat TTMinRowHeight;
+extern const CGFloat TTMaxRowHeight;
