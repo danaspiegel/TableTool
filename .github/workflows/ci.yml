@@ -51,23 +51,8 @@ jobs:
 
       - name: Package app
         run: |
-          mkdir -p "$RUNNER_TEMP/artifact"
-          cp -R "$RUNNER_TEMP/DerivedData/Build/Products/Release/Table Tool.app" \
-                "$RUNNER_TEMP/artifact/Table Tool.app"
-          SCRIPT="$RUNNER_TEMP/artifact/Open Table Tool.command"
-          printf '%s\n' \
-            '#!/bin/bash' \
-            '# macOS quarantines apps downloaded from the internet, which causes' \
-            '# Gatekeeper to block unsigned apps from running. This script removes' \
-            '# that quarantine attribute and opens the app.' \
-            '# Double-click this file in Finder to launch the app for testing.' \
-            'DIR="$(cd "$(dirname "$0")" && pwd)"' \
-            'xattr -rd com.apple.quarantine "$DIR/Table Tool.app" 2>/dev/null' \
-            'open "$DIR/Table Tool.app"' \
-            > "$SCRIPT"
-          chmod +x "$SCRIPT"
           ditto -c -k --sequesterRsrc --keepParent \
-            "$RUNNER_TEMP/artifact" \
+            "$RUNNER_TEMP/DerivedData/Build/Products/Release/Table Tool.app" \
             "$RUNNER_TEMP/TableTool.zip"
 
       - name: Upload build artifact
