@@ -126,8 +126,14 @@
         font = [NSFont systemFontOfSize:fontSize];
     }
     [dataCell setFont:font];
+    for (NSTableColumn *col in self.tableView.tableColumns) {
+        if ([col.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+            [col.dataCell setFont:font];
+            break;
+        }
+    }
     CGFloat fontHeight = ceil(font.ascender - font.descender + font.leading);
-    self.tableView.rowHeight = MAX(17.0, fontHeight);
+    self.tableView.rowHeight = MAX(17.0, fontHeight + self.tableView.intercellSpacing.height);
     [self.tableView reloadData];
 }
 
