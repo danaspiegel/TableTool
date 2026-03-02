@@ -126,6 +126,7 @@
         font = [NSFont systemFontOfSize:fontSize];
     }
     [dataCell setFont:font];
+    self.tableView.rowHeight = MAX(17.0, ceil(font.pointSize) + 4.0);
     [self.tableView reloadData];
 }
 
