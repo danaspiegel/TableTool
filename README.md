@@ -30,6 +30,24 @@ Edit the contents of the cells, rows and columns of the document easily in a gri
 **Convert Files:**
 Convert an existing CSV file to a different format.
 
+## Testing Builds
+
+CI builds are generated automatically for every push and pull request. To download and run a testing build:
+
+1. Open the [Actions tab](../../actions/workflows/ci.yml) and click the latest successful run.
+2. Scroll to the **Artifacts** section and download **TableTool-\<sha\>.zip**.
+3. Unzip the file — you will find **Table Tool.app** and **Open Table Tool.command**.
+4. **Double-click `Open Table Tool.command`** in Finder to launch the app.
+
+> **Why the launch script?** macOS Gatekeeper quarantines every file downloaded from the internet. Because this is an ad-hoc–signed development build (not distributed through the Mac App Store or notarized), macOS will block it from opening directly. The `Open Table Tool.command` script removes the quarantine attribute and then opens the app. You may be prompted to allow Terminal to run the script — click **OK**.
+
+Alternatively, you can remove the quarantine attribute yourself from the Terminal:
+
+```bash
+xattr -rd com.apple.quarantine "/path/to/Table Tool.app"
+open "/path/to/Table Tool.app"
+```
+
 ## Credits
 
 Table Tool was made by [Sandro Peham](https://github.com/SandroPeham), 
