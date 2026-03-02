@@ -11,3 +11,13 @@
 #pragma mark Initializing Globals for Pasteboard Types
 
 NSString *TTRowInternalPboardType = @"Table Tool Row Internal PasteBoard Type";
+
+#pragma mark Initializing Globals for Table Column Identifiers
+
+NSString *TTLineNumberColumnIdentifier = @"#";
+
+#pragma mark Initializing Globals for User Defaults Keys
+
+NSString *TTShowLineNumbersKey = @"showLineNumbers";
+NSString *TTTableFontNameKey = @"tableFontName";
+NSString *TTTableFontSizeKey = @"tableFontSize";

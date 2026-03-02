@@ -13,6 +13,7 @@
 #import "CSVHeuristic.h"
 #import "TTErrorViewController.h"
 #import "ToolbarIcons.h"
+#import "TTPreferencesWindowController.h"
 
 @interface Document () {
     NSCell *dataCell;
@@ -32,6 +33,11 @@
     TTErrorViewController *errorController;
     TTFormatViewController *statusBarFormatViewController;
     TTFormatViewController* accessoryViewController;
+
+    NSView *findBarView;
+    NSSearchField *findSearchField;
+    NSArray *findMatches;
+    NSInteger findMatchIndex;
 }
 @property BOOL didSave;
 
@@ -60,12 +66,19 @@
 -(void)dealloc {
 	[self removeObserver:self forKeyPath:@"fileURL"];
 	[self removeObserver:self forKeyPath:@"didSave"];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSUserDefaultsDidChangeNotification object:nil];
 }
 
 - (void)windowControllerDidLoadNib:(NSWindowController *)aController {
     [super windowControllerDidLoadNib:aController];
     dataCell = [self.tableView.tableColumns.firstObject dataCell];
     [self updateTableColumns];
+    [self applyTableFont];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(userDefaultsDidChange:)
+                                                 name:NSUserDefaultsDidChangeNotification
+                                               object:nil];
     
     if (!statusBarFormatViewController) {
         statusBarFormatViewController = [[TTFormatViewController alloc] initWithNibName:@"TTFormatViewController" bundle:nil];
@@ -98,6 +111,26 @@
 
 - (void)close {
     [super close];
+}
+
+-(void)applyTableFont {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *fontName = [defaults stringForKey:TTTableFontNameKey];
+    CGFloat fontSize = [defaults doubleForKey:TTTableFontSizeKey];
+    if (fontSize <= 0) fontSize = 13;
+    NSFont *font = nil;
+    if (fontName) {
+        font = [NSFont fontWithName:fontName size:fontSize];
+    }
+    if (!font) {
+        font = [NSFont systemFontOfSize:fontSize];
+    }
+    [dataCell setFont:font];
+    [self.tableView reloadData];
+}
+
+-(void)userDefaultsDidChange:(NSNotification *)notification {
+    [self applyTableFont];
 }
 
 
@@ -135,6 +168,7 @@
 			[headerRow addObject:@""];
 		}
 		for(NSTableColumn * col in self.tableView.tableColumns){
+			if ([col.identifier isEqualToString:TTLineNumberColumnIdentifier]) continue;
 			[headerRow replaceObjectAtIndex:col.identifier.integerValue withObject:col.headerCell.stringValue];
 		}
 		exportData = [@[headerRow] arrayByAddingObjectsFromArray:exportData];
@@ -242,6 +276,10 @@
 
 - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
     
+    if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+        return [NSString stringWithFormat:@"%ld", rowIndex + 1];
+    }
+    
     if(_data.count >= rowIndex+1) {
         NSArray *rowArray = _data[rowIndex];
         if(rowArray.count >= tableColumn.identifier.integerValue+1){
@@ -256,12 +294,16 @@
 
 -(void)tableView:(NSTableView *)tableView setObjectValue:(id)object forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
     
+    if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) return;
     [self restoreObjectValue:object forTableColumn:tableColumn row:rowIndex reload:NO];
     [self.undoManager setActionName:@"Edit Cell"];
     
 }
 
 -(void)tableView:(NSTableView *)tableView willDisplayCell:(id)cell forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
+    if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+        return;
+    }
     if(_data.count <= rowIndex) return;
     NSTextFieldCell *textCell = cell;
     NSArray *rowArray = [_data objectAtIndex:rowIndex];
@@ -272,6 +314,22 @@
             textCell.alignment = NSLeftTextAlignment;
         }
     }
+}
+
+-(BOOL)tableView:(NSTableView *)tableView shouldEditTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex {
+    return ![tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier];
+}
+
+-(BOOL)tableView:(NSTableView *)tableView shouldSelectTableColumn:(NSTableColumn *)tableColumn {
+    return ![tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier];
+}
+
+-(BOOL)tableView:(NSTableView *)tableView shouldReorderColumn:(NSInteger)columnIndex toColumn:(NSInteger)newColumnIndex {
+    if (columnIndex < 0 || columnIndex >= (NSInteger)self.tableView.tableColumns.count) return YES;
+    NSTableColumn *col = self.tableView.tableColumns[columnIndex];
+    if ([col.identifier isEqualToString:TTLineNumberColumnIdentifier]) return NO;
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey] && newColumnIndex == 0) return NO;
+    return YES;
 }
 
 -(void)restoreObjectValue:(id)object forTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)rowIndex reload:(BOOL)shouldReload {
@@ -315,7 +373,9 @@
 -(NSArray *)getColumnsOrder{
     NSMutableArray *columnsOrder = [[NSMutableArray alloc] init];
     for(NSTableColumn *col in self.tableView.tableColumns) {
-        [columnsOrder addObject:col.identifier];
+        if (![col.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+            [columnsOrder addObject:col.identifier];
+        }
     }
     return columnsOrder.copy;
 }
@@ -559,27 +619,53 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
 
 #pragma mark - updateTableView
 
+-(NSTableColumn *)createLineNumberColumn {
+    NSTableColumn *lineNumberColumn = [[NSTableColumn alloc] initWithIdentifier:TTLineNumberColumnIdentifier];
+    NSTextFieldCell *lineNumberCell = [[NSTextFieldCell alloc] init];
+    lineNumberCell.alignment = NSRightTextAlignment;
+    lineNumberCell.textColor = [NSColor secondaryLabelColor];
+    lineNumberCell.editable = NO;
+    lineNumberColumn.dataCell = lineNumberCell;
+    lineNumberColumn.headerCell.stringValue = @"#";
+    ((NSCell *)lineNumberColumn.headerCell).alignment = NSCenterTextAlignment;
+    lineNumberColumn.width = 40;
+    lineNumberColumn.minWidth = 20;
+    lineNumberColumn.maxWidth = 60;
+    lineNumberColumn.resizingMask = NSTableColumnUserResizingMask;
+    lineNumberColumn.editable = NO;
+    return lineNumberColumn;
+}
+
 -(void)updateTableColumns {
     if (!self.tableView) return;
     
     for(NSTableColumn *col in self.tableView.tableColumns.mutableCopy) {
         [self.tableView removeTableColumn:col];
     }
+    
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey]) {
+        [self.tableView addTableColumn:[self createLineNumberColumn]];
+    }
+    
     for(int i = 0; i < _maxColumnNumber; ++i) {
         NSTableColumn *tableColumn = [[NSTableColumn alloc] initWithIdentifier:[NSString stringWithFormat:@"%d",i]];
         tableColumn.dataCell = dataCell;
 		tableColumn.headerCell.stringValue = i < columnNames.count ? columnNames[i] : [self generateColumnName:i];
         ((NSCell *)tableColumn.headerCell).alignment = NSCenterTextAlignment;
+        tableColumn.sortDescriptorPrototype = [NSSortDescriptor sortDescriptorWithKey:[NSString stringWithFormat:@"%d",i] ascending:YES];
         [self.tableView addTableColumn: tableColumn];
     }
 }
 
 -(void)updateTableColumnsNames {
     if(!self.csvConfig.firstRowAsHeader){
+        int dataColumnIndex = 0;
         for(int i = 0; i < [self.tableView.tableColumns count]; i++) {
             NSTableColumn *tableColumn = self.tableView.tableColumns[i];
-            tableColumn.headerCell.stringValue = [self generateColumnName:i];
+            if ([tableColumn.identifier isEqualToString:TTLineNumberColumnIdentifier]) continue;
+            tableColumn.headerCell.stringValue = [self generateColumnName:dataColumnIndex];
             ((NSCell *)tableColumn.headerCell).alignment = NSCenterTextAlignment;
+            dataColumnIndex++;
         }
     }
 }
@@ -680,10 +766,11 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         return;
     }
     
+    BOOL showingLineNumbers = [[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey];
     long columnIndex;
     if([self.tableView selectedColumn] == -1){
         if([self.tableView editedColumn] == -1){
-            columnIndex = 0;
+            columnIndex = showingLineNumbers ? 1 : 0;
         } else {
             columnIndex = [self.tableView editedColumn];
         }
@@ -964,6 +1051,10 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
             return NO;
         }
     }
+    if (menuItem.action == @selector(toggleLineNumbers:)) {
+        BOOL showingLineNumbers = [[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey];
+        menuItem.state = showingLineNumbers ? NSOnState : NSOffState;
+    }
     return YES;
 }
 
@@ -1152,4 +1243,143 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
 -(IBAction)openReadme:(id)sender {
     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/jakob/TableTool/blob/master/README.md"]];
 }
+
+-(IBAction)toggleLineNumbers:(id)sender {
+    BOOL current = [[NSUserDefaults standardUserDefaults] boolForKey:TTShowLineNumbersKey];
+    BOOL newValue = !current;
+    [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:TTShowLineNumbersKey];
+    if (newValue) {
+        [self.tableView addTableColumn:[self createLineNumberColumn]];
+        [self.tableView moveColumn:[self.tableView numberOfColumns]-1 toColumn:0];
+    } else {
+        for (NSTableColumn *col in self.tableView.tableColumns) {
+            if ([col.identifier isEqualToString:TTLineNumberColumnIdentifier]) {
+                [self.tableView removeTableColumn:col];
+                break;
+            }
+        }
+    }
+    [self.tableView reloadData];
+}
+
+#pragma mark - Sort by Column
+
+-(void)tableView:(NSTableView *)tableView sortDescriptorsDidChange:(NSArray *)oldDescriptors {
+    NSSortDescriptor *sd = tableView.sortDescriptors.firstObject;
+    if (!sd) return;
+    NSInteger colIndex = sd.key.integerValue;
+    [_data sortUsingComparator:^NSComparisonResult(NSMutableArray *row1, NSMutableArray *row2) {
+        id val1 = colIndex < (NSInteger)row1.count ? row1[colIndex] : @"";
+        id val2 = colIndex < (NSInteger)row2.count ? row2[colIndex] : @"";
+        NSString *str1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val1 description] : (NSString *)val1;
+        NSString *str2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val2 description] : (NSString *)val2;
+        NSComparisonResult result = [str1 localizedCaseInsensitiveCompare:str2];
+        return sd.ascending ? result : -result;
+    }];
+    [self.tableView reloadData];
+}
+
+#pragma mark - Find Bar
+
+-(void)buildFindBarInView:(NSView *)containerView {
+    findBarView = [[NSView alloc] init];
+    findBarView.translatesAutoresizingMaskIntoConstraints = NO;
+    findBarView.wantsLayer = YES;
+    findBarView.layer.backgroundColor = [NSColor windowBackgroundColor].CGColor;
+    [containerView addSubview:findBarView];
+
+    findSearchField = [[NSSearchField alloc] init];
+    findSearchField.translatesAutoresizingMaskIntoConstraints = NO;
+    findSearchField.target = self;
+    findSearchField.action = @selector(findSearchFieldChanged:);
+    [findBarView addSubview:findSearchField];
+
+    NSButton *prevButton = [NSButton buttonWithTitle:@"▲" target:self action:@selector(findPrev:)];
+    prevButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [findBarView addSubview:prevButton];
+
+    NSButton *nextButton = [NSButton buttonWithTitle:@"▼" target:self action:@selector(findNext:)];
+    nextButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [findBarView addSubview:nextButton];
+
+    NSButton *closeButton = [NSButton buttonWithTitle:@"✕" target:self action:@selector(closeFindBar:)];
+    closeButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [findBarView addSubview:closeButton];
+
+    NSDictionary *views = @{@"field": findSearchField, @"prev": prevButton, @"next": nextButton, @"close": closeButton};
+    [findBarView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-8-[field]-8-[prev]-4-[next]-4-[close]-8-|" options:NSLayoutFormatAlignAllCenterY metrics:nil views:views]];
+    [findBarView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-4-[field]-4-|" options:0 metrics:nil views:views]];
+
+    [containerView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[findBar]|" options:0 metrics:nil views:@{@"findBar": findBarView}]];
+    [containerView addConstraint:[NSLayoutConstraint constraintWithItem:findBarView attribute:NSLayoutAttributeBottom relatedBy:NSLayoutRelationEqual toItem:containerView attribute:NSLayoutAttributeBottom multiplier:1 constant:0]];
+    [containerView addConstraint:[NSLayoutConstraint constraintWithItem:findBarView attribute:NSLayoutAttributeHeight relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:28]];
+}
+
+-(IBAction)performFindPanelAction:(id)sender {
+    NSInteger tag = [sender tag];
+    if (tag == 1) {
+        if (!findBarView) {
+            NSView *container = self.tableView.enclosingScrollView.superview;
+            [self buildFindBarInView:container];
+        }
+        findBarView.hidden = NO;
+        [self.tableView.window makeFirstResponder:findSearchField];
+    } else if (tag == 2) {
+        [self findNext:sender];
+    } else if (tag == 3) {
+        [self findPrev:sender];
+    }
+}
+
+-(void)findSearchFieldChanged:(id)sender {
+    NSString *searchString = findSearchField.stringValue;
+    NSMutableArray *matches = [NSMutableArray array];
+    if (searchString.length > 0) {
+        for (NSInteger row = 0; row < (NSInteger)_data.count; row++) {
+            NSMutableArray *rowData = _data[row];
+            for (id cell in rowData) {
+                NSString *cellString = [cell isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)cell description] : (NSString *)cell;
+                if ([cellString rangeOfString:searchString options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    [matches addObject:@(row)];
+                    break;
+                }
+            }
+        }
+    }
+    findMatches = [matches copy];
+    findMatchIndex = 0;
+    if (findMatches.count > 0) {
+        NSInteger row = [findMatches[0] integerValue];
+        [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+        [self.tableView scrollRowToVisible:row];
+    }
+}
+
+-(void)findNext:(id)sender {
+    if (findMatches.count == 0) return;
+    NSInteger count = (NSInteger)findMatches.count;
+    findMatchIndex = (findMatchIndex + 1) % count;
+    NSInteger row = [findMatches[findMatchIndex] integerValue];
+    [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+    [self.tableView scrollRowToVisible:row];
+}
+
+-(void)findPrev:(id)sender {
+    if (findMatches.count == 0) return;
+    NSInteger count = (NSInteger)findMatches.count;
+    findMatchIndex = (findMatchIndex - 1 + count) % count;
+    NSInteger row = [findMatches[findMatchIndex] integerValue];
+    [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+    [self.tableView scrollRowToVisible:row];
+}
+
+-(void)closeFindBar:(id)sender {
+    [findBarView removeFromSuperview];
+    findBarView = nil;
+    findSearchField = nil;
+    findMatches = nil;
+    findMatchIndex = 0;
+    [self.tableView.window makeFirstResponder:self.tableView];
+}
+
 @end
