@@ -73,7 +73,7 @@
     [super windowControllerDidLoadNib:aController];
     dataCell = [self.tableView.tableColumns.firstObject dataCell];
     [self updateTableColumns];
-    [self applyTableFont];
+    [self applyTableAppearance];
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(userDefaultsDidChange:)
@@ -92,6 +92,12 @@
     
     if(newFile){
         _maxColumnNumber = 3;
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSInteger defaultEncoding = [defaults integerForKey:TTDefaultEncodingKey];
+        if (defaultEncoding > 0) _csvConfig.encoding = (NSStringEncoding)defaultEncoding;
+        NSString *defaultSeparator = [defaults stringForKey:TTDefaultColumnSeparatorKey];
+        if (defaultSeparator.length > 0) _csvConfig.columnSeparator = defaultSeparator;
+        _csvConfig.firstRowAsHeader = [defaults boolForKey:TTDefaultFirstRowAsHeaderKey];
         [self updateTableColumns];
         [_data addObject:[[NSMutableArray alloc]init]];
         [self.tableView reloadData];
@@ -113,7 +119,7 @@
     [super close];
 }
 
--(void)applyTableFont {
+-(void)applyTableAppearance {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *fontName = [defaults stringForKey:TTTableFontNameKey];
     CGFloat fontSize = [defaults doubleForKey:TTTableFontSizeKey];
@@ -126,11 +132,15 @@
         font = [NSFont systemFontOfSize:fontSize];
     }
     [dataCell setFont:font];
+    self.tableView.usesAlternatingRowBackgroundColors = [defaults boolForKey:TTAlternatingRowColorsKey];
+    CGFloat rowHeight = [defaults doubleForKey:TTRowHeightKey];
+    if (rowHeight < TTMinRowHeight) rowHeight = 20;
+    self.tableView.rowHeight = rowHeight;
     [self.tableView reloadData];
 }
 
 -(void)userDefaultsDidChange:(NSNotification *)notification {
-    [self applyTableFont];
+    [self applyTableAppearance];
 }
 
 

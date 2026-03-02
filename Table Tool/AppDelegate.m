@@ -19,7 +19,12 @@
 + (void)initialize {
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
         TTShowLineNumbersKey: @YES,
-        TTTableFontSizeKey: @13
+        TTTableFontSizeKey: @13,
+        TTAlternatingRowColorsKey: @YES,
+        TTRowHeightKey: @20.0,
+        TTDefaultEncodingKey: @(NSUTF8StringEncoding),
+        TTDefaultColumnSeparatorKey: @",",
+        TTDefaultFirstRowAsHeaderKey: @NO
     }];
 }
 

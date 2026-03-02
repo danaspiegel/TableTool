@@ -21,3 +21,11 @@ NSString *TTLineNumberColumnIdentifier = @"#";
 NSString *TTShowLineNumbersKey = @"showLineNumbers";
 NSString *TTTableFontNameKey = @"tableFontName";
 NSString *TTTableFontSizeKey = @"tableFontSize";
+NSString *TTAlternatingRowColorsKey = @"alternatingRowColors";
+NSString *TTRowHeightKey = @"rowHeight";
+NSString *TTDefaultEncodingKey = @"defaultEncoding";
+NSString *TTDefaultColumnSeparatorKey = @"defaultColumnSeparator";
+NSString *TTDefaultFirstRowAsHeaderKey = @"defaultFirstRowAsHeader";
+
+const CGFloat TTMinRowHeight = 14.0;
+const CGFloat TTMaxRowHeight = 60.0;
