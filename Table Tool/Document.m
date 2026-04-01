@@ -1269,6 +1269,14 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
     if (!sd) return;
     NSInteger colIndex = sd.key.integerValue;
 
+    // Use the same regex the editor uses for numeric detection, so that the
+    // configured decimal separator (e.g. ',' for European locales) is honoured.
+    NSString *decimalMark = self.csvConfig.decimalMark;
+    NSDictionary *locale = @{NSLocaleDecimalSeparator: decimalMark};
+    NSRegularExpression *numberRegex = [NSRegularExpression regularExpressionWithPattern:
+        [NSString stringWithFormat:@"^\\s*[+-]?(\\d+\\%@?\\d*|\\d*\\%@?\\d+)([eE][+-]?\\d+)?\\s*$", decimalMark, decimalMark]
+        options:0 error:NULL];
+
     // Determine whether all non-empty values in the column are numeric so we
     // can choose between a numeric and an alphabetic sort.
     BOOL sortNumerically = YES;
@@ -1277,8 +1285,7 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         if ([val isKindOfClass:[NSDecimalNumber class]]) continue;
         NSString *str = (NSString *)val;
         if (str.length == 0) continue;
-        NSDecimalNumber *num = [NSDecimalNumber decimalNumberWithString:str];
-        if ([num isEqual:[NSDecimalNumber notANumber]]) {
+        if ([numberRegex numberOfMatchesInString:str options:0 range:NSMakeRange(0, str.length)] != 1) {
             sortNumerically = NO;
             break;
         }
@@ -1290,13 +1297,13 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
         NSComparisonResult result;
         if (sortNumerically) {
             NSDecimalNumber *num1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? val1 :
-                ([(NSString *)val1 length] > 0 ? [NSDecimalNumber decimalNumberWithString:(NSString *)val1] : [NSDecimalNumber zero]);
+                ([(NSString *)val1 length] > 0 ? [NSDecimalNumber decimalNumberWithString:(NSString *)val1 locale:locale] : [NSDecimalNumber zero]);
             NSDecimalNumber *num2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? val2 :
-                ([(NSString *)val2 length] > 0 ? [NSDecimalNumber decimalNumberWithString:(NSString *)val2] : [NSDecimalNumber zero]);
+                ([(NSString *)val2 length] > 0 ? [NSDecimalNumber decimalNumberWithString:(NSString *)val2 locale:locale] : [NSDecimalNumber zero]);
             result = [num1 compare:num2];
         } else {
-            NSString *str1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val1 description] : (NSString *)val1;
-            NSString *str2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val2 description] : (NSString *)val2;
+            NSString *str1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val1 descriptionWithLocale:locale] : (NSString *)val1;
+            NSString *str2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val2 descriptionWithLocale:locale] : (NSString *)val2;
             result = [str1 localizedCaseInsensitiveCompare:str2];
         }
         return sd.ascending ? result : -result;
