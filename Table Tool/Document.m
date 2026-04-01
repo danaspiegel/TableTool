@@ -1268,12 +1268,44 @@ writeRowsWithIndexes:(NSIndexSet *)rowIndexes
     NSSortDescriptor *sd = tableView.sortDescriptors.firstObject;
     if (!sd) return;
     NSInteger colIndex = sd.key.integerValue;
+
+    // Use the same regex the editor uses for numeric detection, so that the
+    // configured decimal separator (e.g. ',' for European locales) is honoured.
+    NSString *decimalMark = self.csvConfig.decimalMark;
+    NSDictionary *locale = @{NSLocaleDecimalSeparator: decimalMark};
+    NSRegularExpression *numberRegex = [NSRegularExpression regularExpressionWithPattern:
+        [NSString stringWithFormat:@"^\\s*[+-]?(\\d+\\%@?\\d*|\\d*\\%@?\\d+)([eE][+-]?\\d+)?\\s*$", decimalMark, decimalMark]
+        options:0 error:NULL];
+
+    // Determine whether all non-empty values in the column are numeric so we
+    // can choose between a numeric and an alphabetic sort.
+    BOOL sortNumerically = YES;
+    for (NSMutableArray *row in _data) {
+        id val = colIndex < (NSInteger)row.count ? row[colIndex] : @"";
+        if ([val isKindOfClass:[NSDecimalNumber class]]) continue;
+        NSString *str = (NSString *)val;
+        if (str.length == 0) continue;
+        if ([numberRegex numberOfMatchesInString:str options:0 range:NSMakeRange(0, str.length)] != 1) {
+            sortNumerically = NO;
+            break;
+        }
+    }
+
     [_data sortUsingComparator:^NSComparisonResult(NSMutableArray *row1, NSMutableArray *row2) {
         id val1 = colIndex < (NSInteger)row1.count ? row1[colIndex] : @"";
         id val2 = colIndex < (NSInteger)row2.count ? row2[colIndex] : @"";
-        NSString *str1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val1 description] : (NSString *)val1;
-        NSString *str2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val2 description] : (NSString *)val2;
-        NSComparisonResult result = [str1 localizedCaseInsensitiveCompare:str2];
+        NSComparisonResult result;
+        if (sortNumerically) {
+            NSDecimalNumber *num1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? val1 :
+                ([(NSString *)val1 length] > 0 ? [NSDecimalNumber decimalNumberWithString:(NSString *)val1 locale:locale] : [NSDecimalNumber zero]);
+            NSDecimalNumber *num2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? val2 :
+                ([(NSString *)val2 length] > 0 ? [NSDecimalNumber decimalNumberWithString:(NSString *)val2 locale:locale] : [NSDecimalNumber zero]);
+            result = [num1 compare:num2];
+        } else {
+            NSString *str1 = [val1 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val1 descriptionWithLocale:locale] : (NSString *)val1;
+            NSString *str2 = [val2 isKindOfClass:[NSDecimalNumber class]] ? [(NSDecimalNumber *)val2 descriptionWithLocale:locale] : (NSString *)val2;
+            result = [str1 localizedCaseInsensitiveCompare:str2];
+        }
         return sd.ascending ? result : -result;
     }];
     [self.tableView reloadData];
